@@ -1,0 +1,150 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "ReceiveOrder",
+  "States": {
+    "ReceiveOrder": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:886047841737:function:ReceiveOrderFunction:$LATEST",
+        "Payload.$": "$"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "CheckInventory"
+    },
+    "CheckInventory": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:886047841737:function:CheckInventoryFunction:$LATEST",
+        "Payload.$": "$"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "Next": "InventoryFailed"
+        }
+      ],
+      "Next": "InventoryConfirmation"
+    },
+    "InventoryConfirmation": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.inventory_status",
+          "StringEquals": "available",
+          "Next": "ChargePayment"
+        }
+      ],
+      "Default": "SendConfirmation"
+    },
+    "ChargePayment": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:886047841737:function:ChargePaymentFunction:$LATEST",
+        "Payload.$": "$"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "Next": "PaymentFailed"
+        }
+      ],
+      "Next": "PaymentConfirmation"
+    },
+    "PaymentConfirmation": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.payment_status",
+          "StringEquals": "charged",
+          "Next": "SendConfirmation"
+        }
+      ],
+      "Default": "PaymentFailed"
+    },
+    "SendConfirmation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:886047841737:function:SendConfirmationEmailFunction:$LATEST",
+        "Payload.$": "$"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "End": true
+    },
+    "PaymentFailed": {
+      "Type": "Fail",
+      "Error": "PaymentError",
+      "Cause": "Payment failed"
+    },
+    "InventoryFailed": {
+      "Type": "Fail",
+      "Error": "InventoryError",
+      "Cause": "Inventory check failed"
+    }
+  }
+}
